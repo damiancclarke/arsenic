@@ -25,7 +25,8 @@ cap mkdir $SUM
 log using "$LOG/censusDynamics.txt", text replace
 
 local Y schooling completeUniv* someUniv active employed professional technic
-
+local groups ChileAll ChileNoMig Region2All Region1_4All Region2NoMig Region1_4NoMig
+local groups Region2All Region1_4All Region2NoMig Region1_4NoMig
 
 
 
@@ -33,7 +34,8 @@ local Y schooling completeUniv* someUniv active employed professional technic
 *** (2) Use and set-up
 ********************************************************************************
 use "$DAT/census2002_r1_4"
-use "$DAT/census2002"
+*use "$DAT/census2002"
+
 rename bplclName birth_comuna
 gen birthYear = 2002 - age
 keep if birthYear >= 1945 & birthYear <= 1975
@@ -43,8 +45,8 @@ replace T1 = 1 if  birth_comuna=="antofagasta"|birth_comuna=="mejillones"
 replace T1 = 2 if birth_comuna=="tocopilla"|birth_comuna=="maria Elena"|/*
                */ birth_comuna=="calama"
 
-gen All            = 1                               if T1!=2
-gen AllNoMig       = noMigrator                      if T1!=2
+gen ChileAll       = 1                               if T1!=2
+gen ChileNoMig     = noMigrator                      if T1!=2
 gen Region2All     = regioncode2000==2               if T1!=2
 gen Region1_4All   = regioncode2000<=4               if T1!=2
 gen Region2NoMig   = regioncode2000==2&noMigrator==1 if T1!=2
@@ -97,18 +99,42 @@ esttab using "$SUM/sumRegion1_4.tex",
    title("Descriptive Statistics (Region I-IV)") replace label noobs
    cells("count(fmt(0)) mean(fmt(2)) sd(fmt(2)) min(fmt(0)) max(fmt(0))");
 
-estpost tabstat `Y' birthYear Arsenic noMigrator if All == 1,                              
+/*
+estpost tabstat `Y' birthYear Arsenic noMigrator if ChileAll == 1,                              
  statistics(count mean sd min max) columns(statistics);
 esttab using "$SUM/sumAll.tex", title("Descriptive Statistics (Chile)") 
    cells("count(fmt(0)) mean(fmt(2)) sd(fmt(2)) min(fmt(0)) max(fmt(0))")
    replace label noobs;
 #delimit cr
+*/
+
+generat educLevel = . if educcl == 0
+replace educLevel = 1 if educcl >= 1 & educcl <=2
+replace educLevel = 2 if educcl >= 3 & educcl <=4
+replace educLevel = 3 if educcl >= 5 & educcl <=11
+replace educLevel = 4 if educcl >= 12 & educcl <=15
+
+lab def ed 1 "None or Pre-Primary" 2 "Primary" 3 "Secondary" 4 "Tertiary"
+lab val educLevel ed
+gen number = 1
+gen years = p26b
+replace years = 4 if educLevel == 3 & p26b>4 
+preserve
+collapse (sum) number, by(educLevel years)
+#delimit ;
+graph hbar number, over(years) over(educLevel) nofill
+  ytitle("Number of People") scheme(s1mono);
+*graph export "$SUM/educationDesc.eps", as(eps) replace;
+graph export "$SUM/educationDesc1_4.eps", as(eps) replace;
+#delimit cr
+restore
+
 
 ********************************************************************************
 *** (4) Birth cohort trends
 ********************************************************************************
 local i=1
-foreach samp in All AllNoMig Region2All Region1_4All Region2NoMig Region1_4NoMig {
+foreach samp in `groups' {
     cap mkdir "$OUT/`samp'"
     preserve
     keep if `samp'==1
